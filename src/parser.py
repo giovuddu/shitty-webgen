@@ -147,8 +147,13 @@ def conv_heading_to_div(md: str) -> ParentNode:
     return ParentNode(tag=f"h{len(marker)}", children=html_leafs)
 
 
-def conv_code_to_div(md: str) -> LeafNode:
-    return LeafNode(tag="code", value=md[3:-3])
+def conv_code_to_div(md: str) -> ParentNode:
+    text_content = md[3:-3]
+    if text_content.startswith("\n"):
+        text_content = text_content[1:]
+
+    code = LeafNode(tag="code", value=text_content)
+    return ParentNode(tag="pre", children=[code])
 
 
 def conv_quote_to_div(md: str) -> ParentNode:
@@ -165,7 +170,10 @@ def conv_list_to_div(md: str, ordered: bool) -> ParentNode:
     lines_html_nodes = []
 
     for line in list_lines:
-        text_content = line[2:]
+        if ordered:
+            text_content = line[3:]
+        else:
+            text_content = line[2:]
         line_text_nodes = list(
             map(text_node_to_html_node, text_to_text_nodes(text_content))
         )
@@ -181,7 +189,9 @@ def conv_list_to_div(md: str, ordered: bool) -> ParentNode:
 
 
 def conv_paragraph_to_div(md: str) -> ParentNode:
-    paragraph_text_nodes = list(map(text_node_to_html_node, text_to_text_nodes(md)))
+    paragraph_text_nodes = list(
+        map(text_node_to_html_node, text_to_text_nodes(md.replace("\n", " ")))
+    )
 
     return ParentNode(tag="p", children=paragraph_text_nodes)
 
