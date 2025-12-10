@@ -1,6 +1,7 @@
 import re
 from block import BlockType
-from textnode import TextNode, TextType
+from htmlnode import LeafNode, ParentNode
+from textnode import TextNode, TextType, text_node_to_html_node
 
 
 def _split_node_delimiter(
@@ -100,7 +101,7 @@ def split_nodes_link(old_nodes: list[TextNode]) -> list[TextNode]:
     return res
 
 
-def text_to_textnodes(text: str) -> list[TextNode]:
+def text_to_text_nodes(text: str) -> list[TextNode]:
     nodes = [TextNode(text, TextType.TEXT, None)]
     nodes = split_nodes_delimiter(nodes, "**", TextType.BOLD)
     nodes = split_nodes_delimiter(nodes, "_", TextType.ITALIC)
@@ -138,5 +139,78 @@ def block_to_block_type(block: str) -> BlockType:
         return BlockType.PARAGRAPH
 
 
-def markdown_to_html_node(markdown: str):
-    pass
+def conv_heading_to_div(md: str) -> ParentNode:
+    marker, text_content = md.split(" ", 1)
+
+    html_leafs = list(map(text_node_to_html_node, text_to_text_nodes(text_content)))
+
+    return ParentNode(tag=f"h{len(marker)}", children=html_leafs)
+
+
+def conv_code_to_div(md: str) -> LeafNode:
+    return LeafNode(tag="code", value=md[3:-3])
+
+
+def conv_quote_to_div(md: str) -> ParentNode:
+    quote_lines = md.split("\n")
+    text_content = "".join(map(lambda x: x[1:], quote_lines))
+    html_leafs = list(map(text_node_to_html_node, text_to_text_nodes(text_content)))
+
+    return ParentNode(tag="blockquote", children=html_leafs)
+
+
+def conv_list_to_div(md: str, ordered: bool) -> ParentNode:
+    list_lines = md.split("\n")
+
+    lines_html_nodes = []
+
+    for line in list_lines:
+        text_content = line[2:]
+        line_text_nodes = list(
+            map(text_node_to_html_node, text_to_text_nodes(text_content))
+        )
+
+        lines_html_nodes.append(ParentNode(tag="li", children=line_text_nodes))
+
+    if ordered:
+        tag = "ol"
+    else:
+        tag = "ul"
+
+    return ParentNode(tag=tag, children=lines_html_nodes)
+
+
+def conv_paragraph_to_div(md: str) -> ParentNode:
+    paragraph_text_nodes = list(map(text_node_to_html_node, text_to_text_nodes(md)))
+
+    return ParentNode(tag="p", children=paragraph_text_nodes)
+
+
+def markdown_to_html_node(markdown: str) -> ParentNode:
+    blocks = list(
+        map(
+            lambda block: (block, block_to_block_type(block)),
+            markdown_to_blocks(markdown),
+        )
+    )
+
+    children = []
+
+    for block in blocks:
+        match block[1]:
+            case BlockType.HEADING:
+                children.append(conv_heading_to_div(block[0]))
+            case BlockType.CODE:
+                children.append(conv_code_to_div(block[0]))
+            case BlockType.QUOTE:
+                children.append(conv_quote_to_div(block[0]))
+            case BlockType.UNORDERED_LIST:
+                children.append(conv_list_to_div(block[0], ordered=False))
+            case BlockType.ORDERED_LIST:
+                children.append(conv_list_to_div(block[0], ordered=True))
+            case BlockType.PARAGRAPH:
+                children.append(conv_paragraph_to_div(block[0]))
+            case _:
+                raise NotImplementedError("OOOOOOOOOOOOO")
+
+    return ParentNode("div", children=children)
